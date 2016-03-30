@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset='utf-8'>
+	<title>DrawMyData</title>
+	<script type='text/javascript' src='d3.v3.min.js'></script>
+
+	<style>
+		body {
+			font-family: 'helvetica';
+		}
+		path {
+			stroke: steelblue;
+			stroke-width: 1;
+			fill: none;
+		}
+		.axis path, .axis line {
+			fill: none;
+			stroke: grey;
+			stroke-width: 1;
+			shape-rendering: crispEdges;
+		     }
+		.dot {
+			fill: rgba(255,255,255,0);
+			stroke: steelblue;
+		}
+		div.tooltip {
+			position: absolute;
+			text-align: center;
+			width: 100px;
+			height: 48px;
+			padding: 2px;
+			font: 12px sans-serif;
+			background: lightsteelblue;
+			border: 0px;
+			border-radius: 8px;
+			pointer-events: none;
+		}
+		button {
+			margin: 0 7px 0 0;
+			background-color: #f5f5f5;
+			border: 1px solid #dedede;
+			border-top: 1px solid #eee;
+			border-left: 1px solid #eee;
+			font-size: 12px;
+			line-height: 130%;
+			text-decoration: none;
+			font-weight: bold;
+			color: #565656;
+			cursor: pointer;
+		}
+	</style>
+
+</head>
+
+<body>
+
+<h2>DrawMyData</h2>
+<p>Want some data that looks a certain way or has certain stats, but don't have the time to look for a suitable data set or generate it randomly? Just set the variable names and ranges below, then click in the scatter plot to add points. When you're happy, you can copy and paste the table, or save it to a .csv file.</p>
+<button onclick="resetit()">Reset</button>
+<!-- ADD TEXT BOXES FOR X AND Y RANGES AND NAMES -->
+
+<script type='text/javascript'>
+
+// REPLACE TOOLTIP WITH TEXT ALONGSIDE GRAPH
+// CONSIDER ANGULAR+D3
+
+// various size parameters and scales
+	var margin = {top: 30, left: 100, right: 200, bottom: 60},
+		width=700,
+		height=490,
+		chartwidth = width - margin.left - margin.right,
+		chartheight = height - margin.top - margin.bottom,
+		axisLabelSpace = 50,
+		legendSpace = 100,
+		xname='X',
+		yname='Y',
+		x = d3.scale.linear().range([margin.left, margin.left+chartwidth]),
+		y = d3.scale.linear().range([chartheight, margin.top]),
+		xAxis = d3.svg.axis().scale(x).orient('bottom').ticks(5),
+		yAxis = d3.svg.axis().scale(y).orient('left').ticks(5),
+		domainPadding = 0.2,
+		mausx=0,mausy=0,xx=0,yy=0;
+
+/*
+	svg = d3.select('body')
+		.append('svg')
+			.attr('id','thesvg')
+			.attr('width', width + margin.left + margin.right)
+			.attr('height', height + margin.top + margin.bottom)
+			.on("click", function() {
+				mausx=d3.mouse(this)[0];
+				mausy=d3.mouse(this)[1];
+				xx=x.invert(mausx);
+				yy=y.invert(mausy);
+
+//				xx=-1*Math.abs((mausx-(x(10)+margin.left))/(x(11)-x(10)));
+//				yy=-1*Math.abs((mausy-(y(x.invert(mausx-margin.left))+margin.top))///						(Math.sqrt(5)*(y(9)-y(10))));
+				svg.selectAll('#click').remove();
+				svg.append('circle')
+					.attr('r', 2)
+					.attr('id', 'click')
+					.style('stroke','rgba(42,43,103,255)')
+					.style('fill','rgba(42,43,103,255)')
+					.attr('cx', mausx-margin.left)
+					.attr('cy', mausy-margin.top);
+
+				// click position in axis values
+				xpos=x.invert(mausx-margin.left);
+				ypos=y.invert(mausy-margin.top);
+				// end of on(click...)
+			})
+
+		.append('g')
+			.attr('transform',
+				'translate(' + margin.left + ',' + margin.top + ')')
+			.attr('id', 'chart');
+*/
+
+// NEED TO INITIALISE WITH EMPTY ARRAY, OR POP AT THE FIRST DATUM?
+	var scatterdata = [
+			{'xvar': 10.64566040039063, 'yvar': 13.14980125427246},
+			{'xvar': 10.46751689910889, 'yvar': 9.00738525390625},
+			{'xvar': 11.25460243225098, 'yvar': 11.10492420196533},
+			{'xvar': 10.82046794891357, 'yvar': 13.55308818817139}
+			];
+
+// domains to be set by text boxes
+	x.domain([0,100]);
+	y.domain([0,100]);
+
+	svg = d3.select('body')
+		.append('svg')
+			.attr('id','thesvg')
+			.attr('width', width )
+			.attr('height', height )
+			.on("click", function() {
+							mausx=d3.mouse(this)[0];
+							mausy=d3.mouse(this)[1];
+							xx=x.invert(mausx);
+							yy=y.invert(mausy);
+							svg.append('circle')
+									.attr('r', 4)
+									.attr('id', 'click')
+									.style('stroke','rgba(42,43,103,255)')
+									.style('fill','rgba(42,43,103,255)')
+									.attr('cx', mausx)
+									.attr('cy', mausy);
+			});
+
+	svg.append('g')
+		.attr('class', 'x axis')
+		.attr('transform', 'translate(0,' + chartheight + ')')
+		.call(xAxis);
+
+	svg.append('text')
+		.attr('transform','translate('+ (margin.left+(chartwidth/2))+','+(chartheight+axisLabelSpace)+')')
+		.style('text-anchor','middle')
+		.text(xname);
+
+	svg.append('g')
+		.attr('class', 'y axis')
+		.attr('transform', 'translate(' + margin.left + ',0)')
+		.call(yAxis);
+//		.attr('transform', 'translate(0,-' + margin.bottom + ')')
+
+	svg.append('text')
+		.attr('transform','rotate(-90)')
+		.attr('x',0-(chartheight/2)-margin.top)
+		.attr('y',margin.left-axisLabelSpace)
+		.style('text-anchor','middle')
+		.text(yname);
+/*
+// MAKE THIS REMOVE ALL POINTS OR EQUIVALENTLY EMPTY THE DATA ARRAY
+	// function to reset chart to point estimate only
+	var resetChart = function () {
+		svg.selectAll('#ciclick').remove();
+		svg.selectAll('#theci').remove();
+		svg.selectAll('circle')
+				.style('stroke','rgba(42,43,103,0)')
+				.style('fill','rgba(42,43,103,0)');
+		svg.selectAll('#point')
+			.style('fill','rgba(103,42,43,90)')
+			.style('stroke','rgba(103,42,43,180)');
+		currentdot=0;
+		lastdot=0;
+		div.transition()
+			.duration(200)
+			.style('opacity',0);
+	}
+
+// IS THIS NEEDED?
+// On click, start or stop animation of randomised data
+	var resetit = function() {
+			resetChart();
+		};
+*/
+</script>
+</body>
