@@ -1,13 +1,21 @@
+<!--  -->
+<!-- hat-tips: http://bl.ocks.org/gka/17ee676dc59aa752b4e6 -->
 <!DOCTYPE html>
 <html>
 <head>
 	<meta charset='utf-8'>
 	<title>DrawMyData</title>
-	<script type='text/javascript' src='d3.v3.min.js'></script>
+	<script type='text/javascript' src='d3.v4.min.js'></script>
+	<link rel="stylesheet" href="bootstrap.min.css">
+	<script src="jquery.min.js"></script>
+	<script src="bootstrap.min.js"></script>
+	<script src="d3-jetpack.js"></script>
+	<script src="angular.min.js"></script>
 
 	<style>
 		body {
 			font-family: 'helvetica';
+			padding: 15px;
 		}
 		path {
 			stroke: steelblue;
@@ -20,9 +28,9 @@
 			stroke-width: 1;
 			shape-rendering: crispEdges;
 		     }
-		.dot {
-			fill: rgba(255,255,255,0);
-			stroke: steelblue;
+		circle.click {
+			stroke: rgba(42,43,103,255);
+			fill: rgba(42,43,103,255))
 		}
 		div.tooltip {
 			position: absolute;
@@ -30,170 +38,255 @@
 			width: 100px;
 			height: 48px;
 			padding: 2px;
-			font: 12px sans-serif;
 			background: lightsteelblue;
 			border: 0px;
 			border-radius: 8px;
 			pointer-events: none;
 		}
-		button {
-			margin: 0 7px 0 0;
-			background-color: #f5f5f5;
-			border: 1px solid #dedede;
-			border-top: 1px solid #eee;
-			border-left: 1px solid #eee;
-			font-size: 12px;
-			line-height: 130%;
-			text-decoration: none;
-			font-weight: bold;
-			color: #565656;
-			cursor: pointer;
+		table {
+			border: solid thin;
+			border-collapse: collapse;
 		}
+		th { text-align: left; }
+    th, td { padding: 0 1em 0.5ex 0;}
+    th.center, td.center { text-align: center; }
+    th.num, td.num { text-align: right; }
 	</style>
 
 </head>
 
+<!-- <body ng-app="ngdraw" ng-controller="cdraw" ng-init="'xname'='X';'yname'='Y';'xmin'=0;'xmax'=100;'ymin'=0;'ymax'=100"> -->
 <body>
 
 <h2>DrawMyData</h2>
-<p>Want some data that looks a certain way or has certain stats, but don't have the time to look for a suitable data set or generate it randomly? Just set the variable names and ranges below, then click in the scatter plot to add points. When you're happy, you can copy and paste the table, or save it to a .csv file.</p>
-<button onclick="resetit()">Reset</button>
+<p>Want some data that look a certain way or have certain stats, but don't have the time to look for a suitable data set or write a program to simulate it? Just click in the scatter plot below to add points. When you're happy, you can copy and paste the table, or save it to a .csv file. You can change the variable names and ranges and click "Reset Chart" to start again.</p>
+<p>X name: <input id='xnamein' type="text" value="X">
+	 X min: <input id='xminin' type="text" value=0>
+	 X max: <input id='xmaxin' type="text" value=100></p>
+<p>Y name: <input id='ynamein' type="text" value="Y">
+ 	 Y min: <input id='yminin' type="text" value=0>
+ 	 Y max: <input id='ymaxin' type="text" value=100></p>
+
+<p id='thestats'></p>
+<svg id='thesvg'></svg>
+<br>
+<button type="button" class="btn btn-primary" onclick="resetit()">Reset chart</button>
+<button type="button" class="btn btn-primary" onclick="saveit()">Save data</button>
+&nbsp; filename: <input id='fname' type="text" value="mydata.csv">
+<!-- button & boxes to add 1 point for mean x/y, add ?4 points for means and SDs/corr -->
 <!-- ADD TEXT BOXES FOR X AND Y RANGES AND NAMES -->
+<br>
+
+<h2>Data table</h2>
+<div id='divtable'>
+	<table id='datatable'>
+		<tr><th>xname</th><th>yname</th></tr>
+	</table>
+</div>
 
 <script type='text/javascript'>
 
-// REPLACE TOOLTIP WITH TEXT ALONGSIDE GRAPH
-// CONSIDER ANGULAR+D3
-
 // various size parameters and scales
-	var margin = {top: 30, left: 100, right: 200, bottom: 60},
-		width=700,
-		height=490,
+	var margin = {top: 30, left: 80, right: 30, bottom: 30},
+		width=500,
+		height=350,
 		chartwidth = width - margin.left - margin.right,
 		chartheight = height - margin.top - margin.bottom,
 		axisLabelSpace = 50,
 		legendSpace = 100,
-		xname='X',
-		yname='Y',
-		x = d3.scale.linear().range([margin.left, margin.left+chartwidth]),
-		y = d3.scale.linear().range([chartheight, margin.top]),
-		xAxis = d3.svg.axis().scale(x).orient('bottom').ticks(5),
-		yAxis = d3.svg.axis().scale(y).orient('left').ticks(5),
 		domainPadding = 0.2,
-		mausx=0,mausy=0,xx=0,yy=0;
+		mausx=0,mausy=0,xx=0,yy=0,
+		xname='X',yname='Y',
+		xmin=0,ymin=0,xmax=100,ymax=100,
+		x = d3.scaleLinear().range([margin.left, margin.left+chartwidth]).domain([xmin,xmax]),
+		y = d3.scaleLinear().range([chartheight, margin.top]).domain([ymin,ymax]);
 
-/*
-	svg = d3.select('body')
-		.append('svg')
-			.attr('id','thesvg')
-			.attr('width', width + margin.left + margin.right)
-			.attr('height', height + margin.top + margin.bottom)
-			.on("click", function() {
-				mausx=d3.mouse(this)[0];
-				mausy=d3.mouse(this)[1];
-				xx=x.invert(mausx);
-				yy=y.invert(mausy);
+	function add(a, b) { return a + b; } // gets used for reducing arrays
 
-//				xx=-1*Math.abs((mausx-(x(10)+margin.left))/(x(11)-x(10)));
-//				yy=-1*Math.abs((mausy-(y(x.invert(mausx-margin.left))+margin.top))///						(Math.sqrt(5)*(y(9)-y(10))));
-				svg.selectAll('#click').remove();
-				svg.append('circle')
-					.attr('r', 2)
-					.attr('id', 'click')
-					.style('stroke','rgba(42,43,103,255)')
-					.style('fill','rgba(42,43,103,255)')
-					.attr('cx', mausx-margin.left)
-					.attr('cy', mausy-margin.top);
 
-				// click position in axis values
-				xpos=x.invert(mausx-margin.left);
-				ypos=y.invert(mausy-margin.top);
-				// end of on(click...)
-			})
+	svg = d3.select('#thesvg');
+	svg.append('g')
+			.attr('class', 'axis')
+			.attr('transform', 'translate(0,' + chartheight + ')')
+			.call(d3.axisBottom(x));
+	svg.append('g')
+			.attr('class', 'axis')
+			.attr('transform', 'translate(' + margin.left + ',0)')
+			.call(d3.axisLeft(y));
+	// axis labels
+	svg.append('text')
+			.attr('id','xlab')
+			.attr('transform','translate('+ (margin.left+(chartwidth/2))+','+(chartheight+axisLabelSpace)+')')
+			.style('text-anchor','middle')
+			.text(xname);
+	svg.append('text')
+			.attr('id','ylab')
+			.attr('transform','rotate(-90)')
+			.attr('x',0-(chartheight/2)-margin.top)
+			.attr('y',margin.left-axisLabelSpace)
+			.style('text-anchor','middle')
+			.text(yname);
 
-		.append('g')
-			.attr('transform',
-				'translate(' + margin.left + ',' + margin.top + ')')
-			.attr('id', 'chart');
-*/
+// update everything
+	var drawit = function() {
+			// calculate stats
+			var xm = 'N/A', ym = 'N/A', xs = 'N/A', ys = 'N/A', cor = 'N/A';
+			if (mydata.length>0) {
+				var xm = Math.round(10000*d3.mean(mydata, function(d) { return d.x; }))/10000;
+				var ym = Math.round(10000*d3.mean(mydata, function(d) { return d.y; }))/10000;
+			}
+			if (mydata.length>1) {
+				var xs = Math.round(10000*d3.deviation(mydata, function(d) { return d.x; }))/10000;
+				var ys = Math.round(10000*d3.deviation(mydata, function(d) { return d.y; }))/10000;
+				var cor = Math.round(10000*((mydata.length*myxy.reduce(add,0) -
+																			myx.reduce(add,0)*myy.reduce(add,0))/
+																			(Math.sqrt(
+																				(mydata.length*myx2.reduce(add,0)-
+																					myx.reduce(add,0)*myx.reduce(add,0))*
+																				(mydata.length*myy2.reduce(add,0)-
+																					myy.reduce(add,0)*myy.reduce(add,0))))))/10000;
+			}
+			// update stats
+			d3.select('p#thestats').text('N = ' + mydata.length + ' ; ' +
+																	 xname + ' mean = ' + xm + ' ; ' +
+																	 xname + ' SD = ' + xs + ' ; ' +
+																 	 yname + ' mean = ' + ym + ' ; ' +
+																   yname + ' SD = ' + ys + ' ; ' +
+																 	 'Pearson correlation = ' + cor);
+			// update the scatterplot
+			svg.selectAll('circle.click')
+				.data(mydata)
+				.enter()
+						.append('circle')
+								.attr('r', 4)
+								.attr('class', 'click')
+								.attr('cx', function(d) { return(x(d.x)); } )
+								.attr('cy', function(d) { return(y(d.y)); } );
+			svg.selectAll('circle.click')
+				.data(mydata)
+				.exit()
+				.remove();
+			// axes
+			svg.selectAll('.axis').remove();
+			svg.append('g')
+					.attr('class', 'axis')
+					.attr('transform', 'translate(0,' + chartheight + ')')
+					.call(d3.axisBottom(x));
+			svg.append('g')
+					.attr('class', 'axis')
+					.attr('transform', 'translate(' + margin.left + ',0)')
+					.call(d3.axisLeft(y));
+			// axis labels
+			svg.select('#xlab').remove();
+			svg.select('#ylab').remove();
+			svg.append('text')
+					.attr('id','xlab')
+					.attr('transform','translate('+ (margin.left+(chartwidth/2))+','+(chartheight+axisLabelSpace)+')')
+					.style('text-anchor','middle')
+					.text(xname);
+			svg.append('text')
+					.attr('id','ylab')
+					.attr('transform','rotate(-90)')
+					.attr('x',0-(chartheight/2)-margin.top)
+					.attr('y',margin.left-axisLabelSpace)
+					.style('text-anchor','middle')
+					.text(yname);
 
-// NEED TO INITIALISE WITH EMPTY ARRAY, OR POP AT THE FIRST DATUM?
-	var scatterdata = [
-			{'xvar': 10.64566040039063, 'yvar': 13.14980125427246},
-			{'xvar': 10.46751689910889, 'yvar': 9.00738525390625},
-			{'xvar': 11.25460243225098, 'yvar': 11.10492420196533},
-			{'xvar': 10.82046794891357, 'yvar': 13.55308818817139}
-			];
+			// update the table
+			// HT vis4.net/blog/posts/making-html-tables-in-d3-doesnt-need-to-be-a-pain/
+			d3.select('#datatable').remove();
+			// column definitions
+    	var columns = [
+        { head: xname, cl: 'title', html: ƒ('x') },
+        { head: yname, cl: 'center', html: ƒ('y') } ];
+			// create table
+    	var table = d3.select('div#divtable')
+        .append('table')
+				.attr('id','datatable');
+    	// create table header
+    	table.append('thead').append('tr')
+        .selectAll('th')
+        .data(columns).enter()
+        .append('th')
+        .attr('class', ƒ('cl'))
+        .text(ƒ('head'));
+    	// create table body
+    	table.append('tbody')
+        .selectAll('tr')
+        .data(mydata).enter()
+        .append('tr')
+        .selectAll('td')
+        .data(function(row, i) {
+            return columns.map(function(c) {
+                // compute cell values for this specific row
+                var cell = {};
+                d3.keys(c).forEach(function(k) {
+                    cell[k] = typeof c[k] == 'function' ? c[k](row,i) : c[k];
+                });
+                return cell;
+            });
+        }).enter()
+        .append('td')
+        .html(ƒ('html'))
+        .attr('class', ƒ('cl'));
+	}
 
-// domains to be set by text boxes
-	x.domain([0,100]);
-	y.domain([0,100]);
+// (make) empty array
+	var resetit = function() {
+			mydata = [];
+			myx = [];
+			myy= [];
+			myx2 = [];
+			myy2 = [];
+			myxy = [];
+			xname = document.getElementById('xnamein').value;
+			yname = document.getElementById('ynamein').value;
+			xmin = +document.getElementById('xminin').value;
+			xmax = +document.getElementById('xmaxin').value;
+			ymin = +document.getElementById('yminin').value;
+			ymax = +document.getElementById('ymaxin').value;
+			x = d3.scaleLinear().range([margin.left, margin.left+chartwidth]).domain([xmin,xmax]);
+			y = d3.scaleLinear().range([chartheight, margin.top]).domain([ymin,ymax]);
+			drawit();
+	}
+	resetit();
 
-	svg = d3.select('body')
-		.append('svg')
-			.attr('id','thesvg')
-			.attr('width', width )
+// interactive stuff
+	svg.attr('width', width )
 			.attr('height', height )
 			.on("click", function() {
 							mausx=d3.mouse(this)[0];
 							mausy=d3.mouse(this)[1];
-							xx=x.invert(mausx);
-							yy=y.invert(mausy);
-							svg.append('circle')
-									.attr('r', 4)
-									.attr('id', 'click')
-									.style('stroke','rgba(42,43,103,255)')
-									.style('fill','rgba(42,43,103,255)')
-									.attr('cx', mausx)
-									.attr('cy', mausy);
+							xx=Math.round(10000*x.invert(mausx))/10000;
+							yy=Math.round(10000*y.invert(mausy))/10000;
+							mydata.push({x:xx, y:yy});
+							myx.push(xx);
+							myy.push(yy);
+							myx2.push(xx*xx);
+							myy2.push(yy*yy);
+							myxy.push(xx*yy);
+							drawit();
 			});
 
-	svg.append('g')
-		.attr('class', 'x axis')
-		.attr('transform', 'translate(0,' + chartheight + ')')
-		.call(xAxis);
+// save the .csv file
+// HT stackoverflow.com/questions/14964035/how-to-export-javascript-array-info-to-csv-on-client-side
+ var saveit=function() {
+	 	fnm = document.getElementById('fname').value;
 
-	svg.append('text')
-		.attr('transform','translate('+ (margin.left+(chartwidth/2))+','+(chartheight+axisLabelSpace)+')')
-		.style('text-anchor','middle')
-		.text(xname);
+		var csvContent = "data:text/csv;charset=utf-8,";
+		mydata.forEach(function(row, index){
+				srow = row.x + "," + row.y;
+   			csvContent += index < mydata.length ? srow+"\n" : srow;
+		});
 
-	svg.append('g')
-		.attr('class', 'y axis')
-		.attr('transform', 'translate(' + margin.left + ',0)')
-		.call(yAxis);
-//		.attr('transform', 'translate(0,-' + margin.bottom + ')')
+		var encodedUri = encodeURI(csvContent);
+		var link = document.createElement("a");
+		link.setAttribute("href", encodedUri);
+		link.setAttribute("download", fnm);
+		document.body.appendChild(link); // Required for FF
 
-	svg.append('text')
-		.attr('transform','rotate(-90)')
-		.attr('x',0-(chartheight/2)-margin.top)
-		.attr('y',margin.left-axisLabelSpace)
-		.style('text-anchor','middle')
-		.text(yname);
-/*
-// MAKE THIS REMOVE ALL POINTS OR EQUIVALENTLY EMPTY THE DATA ARRAY
-	// function to reset chart to point estimate only
-	var resetChart = function () {
-		svg.selectAll('#ciclick').remove();
-		svg.selectAll('#theci').remove();
-		svg.selectAll('circle')
-				.style('stroke','rgba(42,43,103,0)')
-				.style('fill','rgba(42,43,103,0)');
-		svg.selectAll('#point')
-			.style('fill','rgba(103,42,43,90)')
-			.style('stroke','rgba(103,42,43,180)');
-		currentdot=0;
-		lastdot=0;
-		div.transition()
-			.duration(200)
-			.style('opacity',0);
-	}
+link.click();
+ }
 
-// IS THIS NEEDED?
-// On click, start or stop animation of randomised data
-	var resetit = function() {
-			resetChart();
-		};
-*/
 </script>
 </body>
